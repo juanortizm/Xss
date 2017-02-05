@@ -6,7 +6,7 @@
 #### cd /Xss
 #### sudo pip install -r requirements.txt
 
-#### If you run the script and it says 'Error connecting to database' You need to install SQLITE executing 'brew install sqlite3' or download at page. 
+#### If you run the script and it says 'Error connecting to database' You need to install SQLITE executing 'brew install sqlite3' or 'apt-get install -y sqlite3 libsqlite3-dev'. 
 
 ### RUN SCRIPT  
 
