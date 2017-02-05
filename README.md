@@ -12,7 +12,7 @@
 
 #### To run xss scanner you have to execute 'python scanxss.py'
 
-#### Set query params 'https://xss-game.appspot.com/level1/frame?query=??' , '??' will be replace by payload.
+#### Set query params 'https://domain.com/uri1/uri11?query=??' , '??' will be replace by payload.
 
 #### Set cookies like 'COOKIENAME=COOKIEVALUE'
 
