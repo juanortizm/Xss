@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+</head>
+<body>
+
+<form method="post" action="/languageSelector">
+	
+	<input type="text" name="text1">
+	<input type="text" name="text2">
+	<input type="submit" name="text3">
+</form>
+
+
+</body>
+</html>

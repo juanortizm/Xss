@@ -1,0 +1,21 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<!-- Copyright 2010 Google Inc. -->
+<html>
+<head>
+<title>Gruyere: Home</title>
+
+<script src="/498717463845/lib.js" text="text/javascript">
+</script>
+</head>
+
+<body>
+
+<a href="/test/link">mock1</a>
+<a href="/test/link?query=ljd">mock2</a>
+<a href="/test/link?query=ljd">mock3</a>
+<a href="https://facebook.com/test2/">mock4</a>
+
+</table>
+</div>
+</body>
+</html>

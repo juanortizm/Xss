@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+</head>
+<body>
+<a onclick="javascript:alert('123')">SS</a>
+TEST
+</body>
+</html>

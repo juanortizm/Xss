@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+</head>
+<body>
+<script>alert("123")</script>
+Test
+</body>
+</html>
