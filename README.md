@@ -6,6 +6,8 @@
 #### cd /Xss
 #### sudo pip install -r requirements.txt
 
+#### If you run the script and it says 'Error connecting to database' You need to install SQLITE executing 'brew install sqlite3' or download at page. 
+
 ### RUN SCRIPT  
 
 #### To run xss scanner you have to execute 'python scanxss.py'
