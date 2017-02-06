@@ -10,6 +10,8 @@
 
 ### RUN SCRIPT  
 
+#### cd /Xss/scanner
+
 #### To run xss scanner you have to execute 'python scanxss.py'
 
 #### Set query params 'https://domain.com/uri1/uri11?query=??' , '??' will be replace by payload.
