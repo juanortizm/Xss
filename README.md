@@ -34,7 +34,7 @@
 
 ##### RUN SCRIPT
 
-###### SET URL,THREADS AND COOKIES
+##### SET URL,THREADS AND COOKIES
 
 ![Screenshot](/demo/Screen Shot 2017-02-02 at 2.58.18 PM.png)
 #
