@@ -81,9 +81,23 @@ class LearningCase(unittest.TestCase):
         self.assertEqual(isXssVulnerability1,False)
         self.assertEqual(isXssVulnerability2,False)
             
-
-
-
+    def test_response_with_bloquequotes(self):
+        file = open('./mocks/mock_response_with_bloquequotes.txt', 'r');
+        page = file.read();
+        soup = BeautifulSoup(page);
+        isXssVulnerability1 = scanxss.findXssInResponse("https://test.com",soup,"javascript:alert('123')")
+        isXssVulnerability2 = scanxss.findXssInResponse("https://test.com",soup,'<script>alert("123")</script>')
+        self.assertEqual(isXssVulnerability1,False)
+        self.assertEqual(isXssVulnerability2,False)
+            
+    def test_response_with_bloquequotes_with_xss(self):
+        file = open('./mocks/mock_response_with_bloquequotes_and_xss.txt', 'r');
+        page = file.read();
+        soup = BeautifulSoup(page);
+        isXssVulnerability1 = scanxss.findXssInResponse("https://test.com",soup,"javascript:alert('123')")
+        isXssVulnerability2 = scanxss.findXssInResponse("https://test.com",soup,'<script>alert("123")</script>')
+        self.assertEqual(isXssVulnerability1,False)
+        self.assertEqual(isXssVulnerability2,True)        
 
 
 def main():
