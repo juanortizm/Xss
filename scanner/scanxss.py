@@ -348,7 +348,7 @@ def findXssInResponse(link,soup,payload):
 		else:
 			inBlockquote = False
 			for blockquote in blockquotes:
-				for script in blockquote.findAll(['script']):
+				for elem in blockquote.findAll(['script']):
 					if str(elem.extract()) == payload:
 						inBlockquote = True;
 			if not inBlockquote:
