@@ -9,6 +9,8 @@ import requests
 from cookielib import CookieJar
 import sqlite3
 import time
+import requests
+import multiprocessing
 
 ########### CONSTANTS ########### 
  
@@ -45,31 +47,43 @@ INICIAL_MESSAGE = """
 
 def main():
 
+	links = list();
+	posts = list();
  	inputs = getInputs();										
 	payloads = readPayloads();		
-	links = []
-	posts = []
-	links.append(createLink(inputs.get('url'),inputs.get('cookies'),inputs.get('url')))
+	
+	print inputs.get('threads')
+	pool = multiprocessing.Pool(processes=inputs.get('threads')) 
+	links.append(createLink(inputs.get('url'),inputs.get('cookies'),inputs.get('url')));
+	
 	for link in links:			
-
 		splitedUrl = splitUrl(link.get('url'));	
 		soup,cookiejar = openPage(link.get('url'),link.get('cookies'));
-		getLinksBySoup(soup,splitedUrl,links,cookiejar)
-		getForms(soup,splitedUrl,links,cookiejar);	 
 
-		if splitedUrl.get('query'):
-			print setTextStyle(SEARCHING_XSS);
-			vulnerabilities = list();
-			cursor = database.cursor();
-			findXssQueries(link.get('urlToTest'),payloads,link.get('cookies'));
+		if splitedUrl: 
+			getLinks(soup,splitedUrl,links,cookiejar);                      # getLinks and getForms 							
+			getForms(soup,splitedUrl,links,cookiejar,posts);	 		    # fill links array	
 
+			if link.get('type') == 'get':
+				if splitedUrl.get('query'):
+					print setTextStyle(SEARCHING_XSS);
+					vulnerabilities = list();
+					cursor = database.cursor();
+					# pool.apply_async(findXssQueries,args = (link.get('urlToTest'),payloads,link.get('cookies')))
+					findXssQueries(link.get('urlToTest'),payloads,link.get('cookies'));
+			else:
+				findXssOnPostForms(link.get('url'),link.get('params'),payloads,link.get('cookies'))
+						
 
-	print setTextStyle(LINKS_FOUNDED % (str(len(links)-1)));		
+	print setTextStyle(LINKS_FOUNDED % (str(len(links)-1)));
+	print setTextStyle(POSTS_FOUNDED % (str(len(posts))));		
 	print setTextStyle(EXECUTE_RESULTS_TABLE);
 
 
-def createLink(url,cookies,urlToTest="",headers=[]):
-	return dict({'url':url,'cookies':cookies,'headers':headers,'urlToTest':urlToTest}) 
+def createLink(url,cookies,urlToTest=""):
+	return dict({'url':url,'cookies':cookies,'urlToTest':urlToTest,'type':'get'})
+def createPost(url,cookies,params):
+	return dict({'url':url,'cookies':cookies,'params':params,'type':'post'})
 				
 def databaseConnection():
 	try:
@@ -88,15 +102,18 @@ def getInputs():
 		threads = raw_input(setTextStyle('THREADS: ')).strip();
 		cookie = raw_input(setTextStyle('COOKIE (enter to continue): ')).strip();
 		inputs = dict();
-		cookies = list();
+		cookies = dict();
 
 		if not threads:
 			threads = 1;
 		else:
 			threads = int(threads);
 
+
 		while cookie:
-			cookies.append(cookie);
+			ck = cookie.split('=');
+			if len(ck) > 1:
+				cookies.update({ck[0]:ck[1]})
 			cookie = raw_input(setTextStyle('COOKIE (enter to continue): ')).strip();
 
 		inputs['url'] = url;
@@ -127,11 +144,8 @@ def splitUrl(url):
 			return data;
 		else:
 			print setTextStyle(ERR_PARSING_INPUTS);
-			sys.exit(0);
-
 	except:
 		print setTextStyle(ERR_PARSING_INPUTS);	
-		sys.exit(0);
 
 def readPayloads():
 	try:
@@ -145,51 +159,44 @@ def readPayloads():
 		sys.exit(0);
 
 
-def openPage(url,cookies=[]):
+def openPage(url,cookies):
 	try:
-		cookiejar = CookieJar();
-		opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cookiejar));
-		for cookie in cookies:
-			opener.addheaders.append(('Cookie', cookie));
-		page = opener.open(url);
-		soup = BeautifulSoup(page);
-		return soup,cookiejar;
+		session = requests.Session();
+		page = session.get(url,cookies=cookies);
+		soup = BeautifulSoup(page.text);
+		cookies = session.cookies.get_dict();
+		return soup,cookies;
 	except:
-		print setTextStyle(ERR_OPEN_PAGE);
-		sys.exit(0);		
+		dummy = ""		
 
-def getLinksBySoup(soup,data,links,cookies):
+def getLinks(soup,data,links,cookies):
 	START_QUERY_PARAM = '?';
 	NEW_QUERY_PARAM = '=??&';
 	
 	for a in soup.findAll('a', href=True):
 		href = urlparse.urlparse(a.get('href'));
-		inLinks= False
 		if (not href.netloc or href.netloc == data.get('domain')):         #Only get links of the same domain
-			for link in links:
-				if a == link.get('url'):
-					inLinks = True
-			if not inLinks:
-				url = ""
-				urlTest = ""
-				if not href.netloc:
-					link = '%s%s%s' % (data.get('protocol'),data.get('domain'),a.get('href'));
-					url = link
-				else: 
-					url = a.get('href')
+			
+			url = ""
+			urlTest = ""
+			if not href.netloc:
+				link = '%s%s%s' % (data.get('protocol'),data.get('domain'),a.get('href'));
+				url = link
+			else: 
+				url = a.get('href')
 				
-				if href.query:	
-					queryParser = urlparse.parse_qsl(href.query);
-					queryParams = START_QUERY_PARAM;
-					for x,y in queryParser:
-						queryParams += x + NEW_QUERY_PARAM;
-					queryParams = queryParams[:-1]
-					urlTest = url.split('?')[0] + queryParams     	    
-
-					links.append(createLink(url,cookies,urlTest))
+			if href.query:	
+				queryParser = urlparse.parse_qsl(href.query);
+				queryParams = START_QUERY_PARAM;
+				for x,y in queryParser:
+					queryParams += x + NEW_QUERY_PARAM;
+				queryParams = queryParams[:-1]
+				urlTest = url.split('?')[0] + queryParams     	    
+			if not inLinks(url,links):	
+				links.append(createLink(url,cookies,urlTest))
 	return links; 	
 
-def getForms(soup,data,links,cookies):
+def getForms(soup,data,links,cookies,posts):
 	NEW_QUERY_PARAM = '=??&';
 	START_QUERY_PARAM = '?';
 	getForms = list();
@@ -221,32 +228,38 @@ def getForms(soup,data,links,cookies):
 					else:
 						link = 	data.get('protocol') + data.get('domain') +  form.get('action') + queryParams;
 				
-				if link not in getForms and data.get('url') != link:
+				if not inLinks(link,links):
 					links.append(createLink(link,cookies,link));
                 
-			# else:
-			# 	inputs = form.findAll('input')
-			# 	params = list();
-			# 	for element in inputs:
-			# 		if element.get('type') != 'submit':
-			# 			params.append(str(element.get('name')));
+			else:
+				inputs = form.findAll('input')
+				params = list();
+				for element in inputs:
+					if element.get('type') != 'submit':
+						params.append(str(element.get('name')));
 				
-			# 	textareas = form.findAll('textarea');	
-			# 	for textarea in textareas:
-			# 		params.append(str(textarea.get('name')));
+				textareas = form.findAll('textarea');	
+				for textarea in textareas:
+					params.append(str(textarea.get('name')));
 
-			# 	if not form.get('action') or form.get('action') == START_QUERY_PARAM:
-			# 		link = data.get('address'); 
-			# 	else:
-			# 		if data.get('address')[-1:] != '/':
-			# 			link = data.get('address')+form.get('action')
-			# 		else:
-			# 			link = data.get('address')[:-1]+form.get('action');	
-			# 	if params:
-			# 		posts.append([link,params]);						 		
-	
-	# return getForms,postForms
+				if not form.get('action') or form.get('action') == START_QUERY_PARAM:
+					link = data.get('address'); 
+				else:
+					if data.get('address')[-1:] != '/':
+						link = data.get('address')+form.get('action')
+					else:
+						link = data.get('address')[:-1]+form.get('action');	
+				if params:
+					posts.append([link,params]);
+				if not inLinks(link,links):
+					links.append(createPost(link,cookies,params))							 		
 
+
+def inLinks(url,links):
+	for link in links:
+		if url == link.get('url'):
+			return True
+	return False
 
 def threadManager(links,payloads,threads,cookies,cookiejar,type):
 	linksByThread = len(links) / threads
@@ -264,9 +277,9 @@ def threadManager(links,payloads,threads,cookies,cookiejar,type):
 		time.sleep(0.5)
 	      
 
-def evalLinks(links,payloads,cookies):
-	for link in links:
-		findXssQueries(link,payloads,cookies);
+def evalLinks(links,payloads,cookies,protocol):
+	for payload in payloads:
+		pool.apply_async(findXssQueries,args=(link,payload,cookies));
 
 
 def findXssQueries(link,payloads,cookies):
@@ -277,14 +290,10 @@ def findXssQueries(link,payloads,cookies):
 		for payload in payloads:
 			quoted_query = urllib.quote(payload);
 			url_payload = link.replace(QUERY_VAR,quoted_query);
-			
-			opener = urllib2.build_opener()
-			for ck in cookies:
-				opener.addheaders.append(('Cookie', ck));
-
-			urlop = opener.open(url_payload);
-			if urlop.getcode() == 200:
-				soup = BeautifulSoup(urlop);
+			session = requests.Session();
+			page = session.get(url_payload,cookies=cookies);
+			if page.status_code == 200:
+				soup = BeautifulSoup(page.text);
 				xss = findXssInResponse(link,soup,payload)    
 				if xss:
 					cursor.execute(INSERT_VULN_QUERY, (link,payload))
