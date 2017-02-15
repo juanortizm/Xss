@@ -51,12 +51,10 @@ def main():
 	posts = list();
  	inputs = getInputs();										
 	payloads = readPayloads();		
-	
-	print inputs.get('threads')
-	pool = multiprocessing.Pool(processes=inputs.get('threads')) 
+	 
 	links.append(createLink(inputs.get('url'),inputs.get('cookies'),inputs.get('url')));
 	
-	for link in links:			
+	for link in links:		
 		splitedUrl = splitUrl(link.get('url'));	
 		soup,cookiejar = openPage(link.get('url'),link.get('cookies'));
 
@@ -67,14 +65,18 @@ def main():
 			if link.get('type') == 'get':
 				if splitedUrl.get('query'):
 					print setTextStyle(SEARCHING_XSS);
-					vulnerabilities = list();
 					cursor = database.cursor();
-					# pool.apply_async(findXssQueries,args = (link.get('urlToTest'),payloads,link.get('cookies')))
-					findXssQueries(link.get('urlToTest'),payloads,link.get('cookies'));
+					evalLinks(link.get('urlToTest'),payloads,link.get('cookies'),inputs.get('threads'))
 			else:
-				findXssOnPostForms(link.get('url'),link.get('params'),payloads,link.get('cookies'))
-						
+				findXssOnPostForms(link.get('url'),link.get('params'),payloads,link.get('cookies'))				
+	
+	for vuln in vulnerabilities:
+		if vuln:
+			cursor.execute(INSERT_VULN_QUERY, (vuln.get('url'),vuln.get('payload')))
+			database.commit();
 
+
+	
 	print setTextStyle(LINKS_FOUNDED % (str(len(links)-1)));
 	print setTextStyle(POSTS_FOUNDED % (str(len(posts))));		
 	print setTextStyle(EXECUTE_RESULTS_TABLE);
@@ -277,27 +279,29 @@ def threadManager(links,payloads,threads,cookies,cookiejar,type):
 		time.sleep(0.5)
 	      
 
-def evalLinks(links,payloads,cookies,protocol):
-	for payload in payloads:
-		pool.apply_async(findXssQueries,args=(link,payload,cookies));
-
-
-def findXssQueries(link,payloads,cookies):
+def evalLinks(link,payloads,cookies,threads):
+	pool = multiprocessing.Pool(processes=threads)
 	print setTextStyle("Testing "+ link)
+	for payload in payloads:
+		pool.apply_async(findXssQueries,args=(link,payload,cookies),callback=vulnerabilities.append);
+	pool.close()	
+	pool.join()		
+
+def findXssQueries(link,payload,cookies):
 	try:
 		QUERY_VAR = '??'
 		cursor = database.cursor();
-		for payload in payloads:
-			quoted_query = urllib.quote(payload);
-			url_payload = link.replace(QUERY_VAR,quoted_query);
-			session = requests.Session();
-			page = session.get(url_payload,cookies=cookies);
-			if page.status_code == 200:
-				soup = BeautifulSoup(page.text);
-				xss = findXssInResponse(link,soup,payload)    
-				if xss:
-					cursor.execute(INSERT_VULN_QUERY, (link,payload))
-					database.commit();
+		quoted_query = urllib.quote(payload);
+		url_payload = link.replace(QUERY_VAR,quoted_query);
+		session = requests.Session();
+		page = session.get(url_payload,cookies=cookies);
+		if page.status_code == 200:
+			soup = BeautifulSoup(page.text);
+			xss = findXssInResponse(link,soup,payload)    
+			if xss:
+				return createResult(link,'get',payload)
+				# cursor.execute(INSERT_VULN_QUERY, (link,payload))
+				# database.commit();
 		 				      				
 	except:
 		dummy = ""
@@ -327,8 +331,9 @@ def findXssOnPostForms(link,inputs,payloads,cookiejar):
 			soup = BeautifulSoup(response)
 			xss = findXssInResponse(link,soup,payload)    
 			if xss:
-				cursor.execute(INSERT_VULN_QUERY, (link,payload))
-				database.commit();
+				createResult(link,'post',payload,data)
+				# cursor.execute(INSERT_VULN_QUERY, (link,payload))
+				# database.commit();
 		except:
 			dummy = ""
 			
@@ -360,6 +365,8 @@ def findXssInResponse(link,soup,payload):
 
 	return False			 
 				
+def createResult(url,method,payload,postParams={}):
+	return dict({'url':url,'method':method,'payload':payload,"postParams":postParams})
 
 
 def setTextStyle(text):
@@ -374,5 +381,6 @@ def setTextStyle(text):
 if __name__ == '__main__':
 
 	print setTextStyle(INICIAL_MESSAGE);
+	vulnerabilities = list();
 	database = databaseConnection();
 	main();
