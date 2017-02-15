@@ -52,10 +52,12 @@ def main():
 
 	links = list();
 	posts = list();
+	testedLinks = list();
+	testedPosts = list();
  	inputs = getInputs();										
 	payloads = readPayloads();	
 	cursor = database.cursor();	
-	 
+	
 	links.append(createLink(inputs.get('url'),inputs.get('cookies'),inputs.get('url')));
 	
 	for link in links:		
@@ -67,11 +69,14 @@ def main():
 			getForms(soup,splitedUrl,links,cookiejar,posts);	 		    # fill links array	
 
 			if link.get('type') == 'get':
-				if splitedUrl.get('query'):
+				if splitedUrl.get('query') and (not link.get('urlToTest') in testedLinks):
 					print setTextStyle(SEARCHING_XSS);
+					testedLinks.append(link.get('urlToTest'))
 					evalLinks(link.get('urlToTest'),payloads,link.get('cookies'),inputs.get('threads'))
 			else:
-				evalPostForms(link.get('url'),link.get('params'),payloads,link.get('cookies'),inputs.get('threads'))
+				if not isPostFormTested(link.get('url'),link.get('params'),testedPosts):
+					testedPosts.append(dict({'url':link.get('url'),'params':link.get('params')}))
+					evalPostForms(link.get('url'),link.get('params'),payloads,link.get('cookies'),inputs.get('threads'))
 	
 	for vuln in vulnerabilities:
 		if vuln:
@@ -103,10 +108,22 @@ def databaseConnection():
 		print setTextStyle(ERR_DB_CONNECTION);
 		sys.exit(0);
 
+def isPostFormTested(url,params,testedPosts):
+	for post in testedPosts:
+		if url == post.get('url'):
+			if len(params) == len(post.get('params')):
+				for param in params:
+					if not param in post.get('params'):
+						return False	
+				return True	
+			else:
+				return False
+	return False		
+
 def getInputs():
 	try:
 		url = raw_input(setTextStyle('URL: ')).strip();
-		threads = raw_input(setTextStyle('THREADS: ')).strip();
+		threads = raw_input(setTextStyle('THREADS (dafault 1, MAX 150): ')).strip();
 		cookie = raw_input(setTextStyle('COOKIE (enter to continue): ')).strip();
 		inputs = dict();
 		cookies = dict();
@@ -115,7 +132,6 @@ def getInputs():
 			threads = 1;
 		else:
 			threads = int(threads);
-
 
 		while cookie:
 			ck = cookie.split('=');
