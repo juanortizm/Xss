@@ -11,13 +11,16 @@ import sqlite3
 import time
 import requests
 import multiprocessing
+import tabulate
+import sqlite3
 
 ########### CONSTANTS ########### 
  
 #.............SQL QUERIES.............#
+CREATE_TABLE = '''CREATE TABLE IF NOT EXISTS VULNS (id INTEGER, url TEXT, vuln TEXT, method TEXT, postParams TEXT);'''
 DELETE_TABLE_QUERY = '''DELETE FROM VULNS''';
-INSERT_VULN_QUERY = '''INSERT INTO VULNS(url, vuln)VALUES(?,?)''';
-SELECT_VULNS_QUERY = '''SELECT vuln FROM VULNS'''; 
+INSERT_VULN_QUERY = '''INSERT INTO VULNS(url, vuln,method,postParams)VALUES(?,?,?,?)''';
+SELECT_VULNS_QUERY = '''SELECT url, vuln, method, postParams FROM VULNS'''; 
 #............END SQL QUERIES..............#
 #.................ERRORS..................#
 ERR_DB_CONNECTION = "Error connecting to database";
@@ -50,7 +53,8 @@ def main():
 	links = list();
 	posts = list();
  	inputs = getInputs();										
-	payloads = readPayloads();		
+	payloads = readPayloads();	
+	cursor = database.cursor();	
 	 
 	links.append(createLink(inputs.get('url'),inputs.get('cookies'),inputs.get('url')));
 	
@@ -65,17 +69,16 @@ def main():
 			if link.get('type') == 'get':
 				if splitedUrl.get('query'):
 					print setTextStyle(SEARCHING_XSS);
-					cursor = database.cursor();
 					evalLinks(link.get('urlToTest'),payloads,link.get('cookies'),inputs.get('threads'))
 			else:
-				findXssOnPostForms(link.get('url'),link.get('params'),payloads,link.get('cookies'))				
+				evalPostForms(link.get('url'),link.get('params'),payloads,link.get('cookies'),inputs.get('threads'))
 	
 	for vuln in vulnerabilities:
 		if vuln:
-			cursor.execute(INSERT_VULN_QUERY, (vuln.get('url'),vuln.get('payload')))
+			cursor.execute(INSERT_VULN_QUERY, (vuln.get('url'),vuln.get('payload'),vuln.get('method'),str(vuln.get('postParams'))))
 			database.commit();
 
-
+	showResult();		
 	
 	print setTextStyle(LINKS_FOUNDED % (str(len(links)-1)));
 	print setTextStyle(POSTS_FOUNDED % (str(len(posts))));		
@@ -91,6 +94,8 @@ def databaseConnection():
 	try:
 		database = sqlite3.connect('vuln.db',check_same_thread = False);
 		cursor = database.cursor();
+		cursor.execute(CREATE_TABLE);
+		database.commit();
 		cursor.execute(DELETE_TABLE_QUERY);
 		database.commit();
 		return database;
@@ -229,17 +234,15 @@ def getForms(soup,data,links,cookies,posts):
 						link = form.get('action') + queryParams;
 					else:
 						link = 	data.get('protocol') + data.get('domain') +  form.get('action') + queryParams;
-				
 				if not inLinks(link,links):
 					links.append(createLink(link,cookies,link));
                 
-			else:
+			else: 
 				inputs = form.findAll('input')
 				params = list();
 				for element in inputs:
 					if element.get('type') != 'submit':
 						params.append(str(element.get('name')));
-				
 				textareas = form.findAll('textarea');	
 				for textarea in textareas:
 					params.append(str(textarea.get('name')));
@@ -252,32 +255,22 @@ def getForms(soup,data,links,cookies,posts):
 					else:
 						link = data.get('address')[:-1]+form.get('action');	
 				if params:
-					posts.append([link,params]);
-				if not inLinks(link,links):
-					links.append(createPost(link,cookies,params))							 		
+					if not inPosts(posts,link):
+						links.append(createPost(link,cookies,params))
+						posts.append([link,params]);							 		
 
 
 def inLinks(url,links):
 	for link in links:
 		if url == link.get('url'):
 			return True
-	return False
+	return False	      
 
-def threadManager(links,payloads,threads,cookies,cookiejar,type):
-	linksByThread = len(links) / threads
-	if not linksByThread:
-		linksByThread = 1;
-	threadLinks = [links[x:x+linksByThread] for x in xrange(0, len(links), linksByThread)];
-	for i in range(len(threadLinks)):
-		thread = None; 
-		if type == 'link':
-			thread = threading.Thread(target=evalLinks, args=(threadLinks[i],payloads,cookies)); 
-		else:
-			thread = threading.Thread(target=evalPostForms, args=(threadLinks[i],payloads,cookiejar));
-		thread.lock = threading.Lock()
-		thread.start()
-		time.sleep(0.5)
-	      
+def inPosts(posts,url):
+	for post in posts:
+		if url == post[0]:
+			return True
+	return False
 
 def evalLinks(link,payloads,cookies,threads):
 	pool = multiprocessing.Pool(processes=threads)
@@ -300,48 +293,45 @@ def findXssQueries(link,payload,cookies):
 			xss = findXssInResponse(link,soup,payload)    
 			if xss:
 				return createResult(link,'get',payload)
-				# cursor.execute(INSERT_VULN_QUERY, (link,payload))
-				# database.commit();
-		 				      				
 	except:
 		dummy = ""
 			
 
-def evalPostForms(forms,payloads,cookieJarResponse):
-	for form in forms:
-		findXssOnPostForms(form[0],form[1],payloads,cookieJarResponse)
+def evalPostForms(link,params,payloads,cookies,threads):
+	pool = multiprocessing.Pool(processes=threads)
+	print setTextStyle("Testing Post "+ link)
+	for payload in payloads:
+		pool.apply_async(findXssOnPostForms,args=(link,params,payload,cookies),callback=vulnerabilities.append);
+	pool.close()	
+	pool.join()		
+		# findXssOnPostForms(form[0],form[1],payloads,cookieJarResponse)
 
 
-def findXssOnPostForms(link,inputs,payloads,cookiejar):
+def findXssOnPostForms(link,inputs,payload,cookies):
 	EQUALS = '=';
 	session = requests.Session();
-	opener = urllib2.build_opener();
 	cursor = database.cursor();
 
-	for cookie in cookiejar:
-		opener.addheaders.append(('Cookie', cookie.name+EQUALS+cookie.value));
+	data = {}
+	for inputData in inputs:
+		data[inputData] = payload
 
-	for payload in payloads:
-		data = {}
-		for inputData in inputs:
-			data[inputData] = payload
-		try:	
-			data_encoded = urllib.urlencode(data)	
-			response = opener.open(link, data_encoded)
-			soup = BeautifulSoup(response)
-			xss = findXssInResponse(link,soup,payload)    
-			if xss:
-				createResult(link,'post',payload,data)
-				# cursor.execute(INSERT_VULN_QUERY, (link,payload))
-				# database.commit();
-		except:
-			dummy = ""
+	try:	
+		session = requests.Session();
+		page = session.post(link,data=data,cookies=cookies);
+		soup = BeautifulSoup(page.text)
+		xss = findXssInResponse(link,soup,payload)  
+		if xss:
+			return createResult(link,'post',payload,data)
+			# cursor.execute(INSERT_VULN_QUERY, (link,payload))
+			# database.commit();
+	except:
+		dummy = ""
 			
 		
 def findXssInResponse(link,soup,payload):
 	SCRIPT_TAG = "<script>";
 	inlineParams = list(['<a onclick="','<img src="','<IFRAME src="'])
-
 	if SCRIPT_TAG in payload:
 		blockquotes = soup.findAll('blockquote')
 		if not blockquotes:
@@ -368,7 +358,6 @@ def findXssInResponse(link,soup,payload):
 def createResult(url,method,payload,postParams={}):
 	return dict({'url':url,'method':method,'payload':payload,"postParams":postParams})
 
-
 def setTextStyle(text):
 	RED = '\033[91m'
 	BOLD = '\033[1m'
@@ -376,6 +365,18 @@ def setTextStyle(text):
 	END = '\033[0m'
 	return BOLD + RED + text + END;
 
+def showResult():
+	cursor = database.cursor();
+	result = []		
+	data = cursor.execute(SELECT_VULNS_QUERY)
+	headers = ["URL", "PAYLOAD","METHOD","POSTPARAMS"]
+	for row in data:
+		result.append([row[0], row[1], row[2] , row[3]])
+	print
+	print tabulate.tabulate(result, headers)
+	print 
+	print
+	database.close(); 
 
 
 if __name__ == '__main__':
