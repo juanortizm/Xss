@@ -38,12 +38,10 @@ SEARCHING_LINKS = "Serching Links...";
 EXECUTE_RESULTS_TABLE = "Execute 'python results.py' when script finish.";
 WITHOUT_VULNERABILITIES = "there are not vulnerabilities in url that you enter";
 INICIAL_MESSAGE = """
-	XSS.py search web xss vulnerabilities by analyzing the html code.
-	If input url has parameters then first will analyze said url with 
-	the list available in payloads.txt,then vulnerabilities found will
-	be tested in the rest of the links in HTML code. But if the input 
-	url does not contain parameters, then the available links will be 
-	searched and then , payloads will be applied. \n\n\n""";
+	scanxss.py search web xss vulnerabilities by analyzing the html code.
+	Recursivly this tool get actual url , extract all links and verify xss
+	on actual url , then it will set another actual url and repeat all steps. 
+	\n\n\n""";
 #.............END MESSAGES................#
 
 	    	

@@ -40,22 +40,25 @@ class LearningCase(unittest.TestCase):
     	file = open('./mocks/mock_html_links.txt', 'r');
     	page = file.read();
     	soup = BeautifulSoup(page);
-    	links = scanxss.getLinks(soup,inputs);
-    	data = scanxss.splitUrl(links[0]);
-    	self.assertEqual(len(links),1);
-    	self.assertEqual(data.get('domain'),inputs.get('domain'));
-    	self.assertTrue(len(data.get('query')) >= 1)
+        links = list();
+    	scanxss.getLinks(soup,inputs,links,{});
+    	data1 = scanxss.splitUrl(links[0].get('url'));
+        data2 = scanxss.splitUrl(links[1].get('urlToTest'));
+    	self.assertEqual(len(links),2);
+    	self.assertTrue(len(data1.get('query')) == 0)
+        self.assertTrue(len(data2.get('query').split('&')) >= 1)
 
     def test_get_forms_From_html(self):
     	inputs = dict({'url':'https://www.linkedin.com/','protocol':'https://','domain': 'www.linkedin.com','path':'/','query':'','address':'https://www.linkedin.com'});
     	file = open('./mocks/mock_html_forms.txt', 'r');
     	page = file.read();
     	soup = BeautifulSoup(page);
-    	gets,posts = scanxss.getForms(soup,inputs);
+        links = list();
+        posts = list();
+    	scanxss.getForms(soup,inputs,links,{},posts);
     	self.assertEqual(len(posts),1);
-    	self.assertEqual(len(gets),0);
-    	self.assertEqual(posts[0][0],"https://www.linkedin.com/languageSelector")
-    	self.assertTrue(len(posts[0][1]) >= 1)
+    	self.assertEqual(len(links),1);
+    	self.assertEqual(links[0].get('url'),"https://www.linkedin.com/languageSelector")
 
    
     def test_find_xss_in_response_with_script_tag(self):
