@@ -318,7 +318,6 @@ def evalPostForms(link,params,payloads,cookies,threads):
 		pool.apply_async(findXssOnPostForms,args=(link,params,payload,cookies),callback=vulnerabilities.append);
 	pool.close()	
 	pool.join()		
-		# findXssOnPostForms(form[0],form[1],payloads,cookieJarResponse)
 
 
 def findXssOnPostForms(link,inputs,payload,cookies):
@@ -337,8 +336,6 @@ def findXssOnPostForms(link,inputs,payload,cookies):
 		xss = findXssInResponse(link,soup,payload)  
 		if xss:
 			return createResult(link,'post',payload,data)
-			# cursor.execute(INSERT_VULN_QUERY, (link,payload))
-			# database.commit();
 	except:
 		dummy = ""
 			
