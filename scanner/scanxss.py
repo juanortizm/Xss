@@ -55,14 +55,18 @@ def main():
  	inputs = getInputs();										
 	payloads = readPayloads();	
 	cursor = database.cursor();	
+
+	if not isValidUrl(inputs.get('url')):
+		print setTextStyle(ERR_INVALID_URL);
+		sys.exit(0);
 	
 	links.append(createLink(inputs.get('url'),inputs.get('cookies'),inputs.get('url')));
 	
 	for link in links:		
 		splitedUrl = splitUrl(link.get('url'));	
-		soup,cookiejar = openPage(link.get('url'),link.get('cookies'));
 
 		if splitedUrl: 
+			soup,cookiejar = openPage(link.get('url'),link.get('cookies'));
 			getLinks(soup,splitedUrl,links,cookiejar);                      # getLinks and getForms 							
 			getForms(soup,splitedUrl,links,cookiejar,posts);	 		    # fill links array	
 
@@ -145,6 +149,12 @@ def getInputs():
 		print setTextStyle(ERR_PARSING_INPUTS);
 		sys.exit(0);	
 
+def isValidUrl(url):
+	try:
+		result = urlparse.urlparse(url);
+		return result.scheme and result.netloc and result.path 
+	except:
+		return false
 
 def splitUrl(url):
 	try: 
